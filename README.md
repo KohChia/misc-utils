@@ -1,2 +1,2 @@
 # lib
-archived utility libraries
+Utilities Library for Windows
