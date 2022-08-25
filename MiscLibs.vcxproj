@@ -22,7 +22,6 @@
     <ProjectGuid>{367FE828-107E-486C-B604-A8AAB465C742}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>MiscLibs</RootNamespace>
-    <WindowsTargetPlatformVersion>$([Microsoft.Build.Utilities.ToolLocationHelper]::GetLatestSDKTargetPlatformVersion('Windows', '10.0'))</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -140,7 +139,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="iniparser.cpp" />
     <ClCompile Include="MiscLibs.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="iniparser.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
