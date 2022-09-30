@@ -1,8 +1,8 @@
-#include <stdio.h>
-#include <tchar.h>
-
+#include <cstdio>
 #include <iostream>
 #include <string>
+
+#if defined(_MSC_VER) && defined(_WIN32)
 
 #include <sdkddkver.h>
 #include <ntstatus.h>
@@ -11,12 +11,23 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <tchar.h>
+
+#else
+
+#define _tmain main
+#define _TCHAR char
+#define _TEXT(x) x
+
+#endif
+
 #include "iniparser.h"
 
 int _tmain(int argc, const _TCHAR *argv[])
 {
 	const std::string sec1("default");
 	const std::string sec2("config");
+	const std::string sec3("test");
 
 	ProfileParser parser("config.ini");
 
@@ -61,6 +72,12 @@ int _tmain(int argc, const _TCHAR *argv[])
 	std::cout << "[" << d1 << "]" << std::endl;
 	auto f1 = parser.readFloat(sec2, "float");
 	std::cout << "[" << f1 << "]" << std::endl;
+
+	parser.writeString(sec3, "key1", std::string("abc"));
+	parser.writeString(sec3, "key2", "def");
+	parser.writeInt32(sec3, "key3", 123);
+
+	parser.save("test.ini");
 
 	return 0;
 }
