@@ -79,5 +79,7 @@ int _tmain(int argc, const _TCHAR *argv[])
 
 	parser.save("test.ini");
 
+	parser.save(std::cout);
+
 	return 0;
 }

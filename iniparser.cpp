@@ -95,6 +95,7 @@ typedef enum {
 	stob_result_none  = -1,
 	stob_result_false =  0,
 	stob_result_true  =  1,
+	stob_result_max
 } stob_result_t;
 
 //
@@ -304,7 +305,7 @@ inline static stob_result_t stob_(const char *psz, std::size_t cch)
 //
 // ProfileParser
 //
-std::size_t ProfileParser::prev_(const std::string &line, std::size_t pos, std::size_t min)
+auto ProfileParser::prev_(const std::string &line, std::size_t pos, std::size_t min) -> std::size_t
 {
 	std::size_t res;
 
@@ -319,7 +320,7 @@ std::size_t ProfileParser::prev_(const std::string &line, std::size_t pos, std::
 	return res;
 }
 
-std::size_t ProfileParser::next_(const std::string &line, std::size_t pos, std::size_t max)
+auto ProfileParser::next_(const std::string &line, std::size_t pos, std::size_t max) -> std::size_t
 {
 	std::size_t res;
 
@@ -334,7 +335,523 @@ std::size_t ProfileParser::next_(const std::string &line, std::size_t pos, std::
 	return res;
 }
 
-void ProfileParser::parse_(std::string &sec, const std::string &line)
+bool ProfileParser::ProfileSection::readHelper_(const std::string &key, const std::function<KeyValueHandler> &handler) const
+{
+	bool res = false;
+	const auto iter = map_.find(key);
+	if (iter != map_.end())
+	{
+		std::string value(iter->second);
+		if (!value.empty())
+		{
+			auto &front = value.front();
+			auto &back = value.back();
+			switch (MAKEDWORD_(front, back)) {
+			case MAKEDWORD_(kDQ, kDQ):
+				if (std::addressof(back) > std::addressof(front))
+				{
+					value.erase(value.begin());
+					value.pop_back();
+				}
+			default:
+				res = handler(value);
+				break;
+			}
+		}
+	}
+	return res;
+}
+
+bool ProfileParser::ProfileSection::readString_(const std::string &key, std::string &result) const
+{
+	return readHelper_(key, [&result](const mapped_type &value) {
+		result.assign(value);
+		return !result.empty();
+	});
+}
+
+bool ProfileParser::ProfileSection::readUInt64_(const std::string &key, std::uint64_t &result) const
+{
+	return readHelper_(key, [&result](const mapped_type &value) {
+		std::size_t pos = 0;
+		result = std::stoull(value, &pos);
+		return (pos > 0);
+	});
+}
+
+bool ProfileParser::ProfileSection::readUInt32_(const std::string &key, std::uint32_t &result) const
+{
+	return readHelper_(key, [&result](const mapped_type &value) {
+		std::size_t pos = 0;
+		result = std::stoul(value, &pos);
+		return (pos > 0);
+	});
+}
+
+bool ProfileParser::ProfileSection::readInt64_(const std::string &key, std::int64_t &result) const
+{
+	return readHelper_(key, [&result](const mapped_type &value) {
+		std::size_t pos = 0;
+		result = std::stoll(value, &pos);
+		return (pos > 0);
+	});
+}
+
+bool ProfileParser::ProfileSection::readInt32_(const std::string &key, std::int32_t &result) const
+{
+	return readHelper_(key, [&result](const mapped_type &value) {
+		std::size_t pos = 0;
+		result = std::stol(value, &pos);
+		return (pos > 0);
+	});
+}
+
+bool ProfileParser::ProfileSection::readDouble_(const std::string &key, double &result) const
+{
+	return readHelper_(key, [&result](const mapped_type &value) {
+		std::size_t pos = 0;
+		result = std::stod(value, &pos);
+		return (pos > 0);
+	});
+}
+
+bool ProfileParser::ProfileSection::readFloat_(const std::string &key, float &result) const
+{
+	return readHelper_(key, [&result](const mapped_type &value) {
+		std::size_t pos = 0;
+		result = std::stof(value, &pos);
+		return (pos > 0);
+	});
+}
+
+bool ProfileParser::ProfileSection::readBool_(const std::string &key, bool &result) const
+{
+	return readHelper_(key, [&result](const mapped_type &value) {
+		switch (stob_(value.data(), value.size())) {
+		case stob_result_true:
+			result = true;
+			return true;
+		case stob_result_false:
+			result = false;
+			return true;
+		default:
+			return false;
+		}
+	});
+}
+
+auto ProfileParser::ProfileSection::readString(const std::string &key, const std::string &def) const -> std::string
+{
+	std::string result;
+	if (!readString_(key, result) && !def.empty())
+	{
+		result.assign(def);
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::readString(const std::string &key, const char *def) const -> std::string
+{
+	std::string result;
+	if (!readString_(key, result) && (def != nullptr))
+	{
+		result.assign(def);
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::readUInt64(const std::string &key, std::uint64_t def) const -> std::uint64_t
+{
+	std::uint64_t result;
+	if (!readUInt64_(key, result))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::readUInt32(const std::string &key, std::uint32_t def) const -> std::uint32_t
+{
+	std::uint32_t result;
+	if (!readUInt32_(key, result))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::readInt64(const std::string &key, std::int64_t def) const -> std::int64_t
+{
+	std::int64_t result;
+	if (!readInt64_(key, result))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::readInt32(const std::string &key, std::int32_t def) const -> std::int32_t
+{
+	std::int32_t result;
+	if (!readInt32_(key, result))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::readDouble(const std::string &key, double def) const -> double
+{
+	double result;
+	if (!readDouble_(key, result))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::readFloat(const std::string &key, float def) const -> float
+{
+	float result;
+	if (!readFloat_(key, result))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::readBool(const std::string &key, bool def) const -> bool
+{
+	bool result;
+	if (!readBool_(key, result))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::ProfileSection::writeString(const std::string &key, const std::string &value) -> bool
+{
+	auto pair = map_.emplace(key, value);
+	return pair.second;
+}
+
+auto ProfileParser::ProfileSection::writeString(const std::string &key, const char *value) -> bool
+{
+	std::string str;
+	if (value != nullptr)
+		str.assign(value);
+	return writeString(
+		key,
+		str);
+}
+
+auto ProfileParser::ProfileSection::writeUInt64(const std::string &key, std::uint64_t value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		key,
+		str);
+}
+
+auto ProfileParser::ProfileSection::writeUInt32(const std::string &key, std::uint32_t value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		key,
+		str);
+}
+
+auto ProfileParser::ProfileSection::writeInt64(const std::string &key, std::int64_t value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		key,
+		str);
+}
+
+auto ProfileParser::ProfileSection::writeInt32(const std::string &key, std::int32_t value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		key,
+		str);
+}
+
+auto ProfileParser::ProfileSection::writeDouble(const std::string &key, double value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		key,
+		str);
+}
+
+auto ProfileParser::ProfileSection::writeFloat(const std::string &key, float value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		key,
+		str);
+}
+
+auto ProfileParser::ProfileSection::writeBool(const std::string &key, bool value) -> bool
+{
+	std::stringstream ss;
+	ss >> std::boolalpha >> value;
+	auto &&str = ss.str();
+	return writeString(
+		key,
+		str);
+}
+
+ProfileParser::ProfileSection::ProfileSection()
+	: map_(StrLssI)
+{
+}
+
+bool ProfileParser::setAliasApp(const std::string &name, const std::string &alias)
+{
+	bool res = false;
+	auto iter = data_.find(name);
+	if (iter != data_.end())
+	{
+		auto pair = data_.emplace(alias, iter->second);
+		alias_.insert(alias);
+		res = pair.second;
+	}
+	return res;
+}
+
+bool ProfileParser::isAliasApp(const std::string &name) const
+{
+	auto iter = alias_.find(name);
+	return (iter != alias_.end());
+}
+
+bool ProfileParser::readHelper_(const std::string &name, const std::string &key, const std::function<SectionHandler> &handler) const
+{
+	bool res = false;
+
+	const auto iter = data_.find(name);
+	if (iter != data_.end())
+	{
+		const auto section = iter->second;
+		if (!section->empty())
+		{
+			res = handler(section);
+		}
+	}
+
+	return res;
+}
+
+auto ProfileParser::readString(const std::string &name, const std::string &key, const std::string &def) const -> std::string
+{
+	std::string result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readString_(key, result);
+	}) && !def.empty())
+	{
+		result.assign(def);
+	}
+	return result;
+}
+
+auto ProfileParser::readString(const std::string &name, const std::string &key, const char *def) const -> std::string
+{
+	std::string result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readString_(key, result);
+	}) && (def != nullptr))
+	{
+		result.assign(def);
+	}
+	return result;
+}
+
+auto ProfileParser::readUInt64(const std::string &name, const std::string &key, std::uint64_t def) const -> std::uint64_t
+{
+	std::uint64_t result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readUInt64_(key, result);
+	}))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::readUInt32(const std::string &name, const std::string &key, std::uint32_t def) const -> std::uint32_t
+{
+	std::uint32_t result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readUInt32_(key, result);
+	}))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::readInt64(const std::string &name, const std::string &key, std::int64_t def) const -> std::int64_t
+{
+	std::int64_t result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readInt64_(key, result);
+	}))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::readInt32(const std::string &name, const std::string &key, std::int32_t def) const -> std::int32_t
+{
+	std::int32_t result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readInt32_(key, result);
+	}))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::readDouble(const std::string &name, const std::string &key, double def) const -> double
+{
+	double result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readDouble_(key, result);
+	}))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::readFloat(const std::string &name, const std::string &key, float def) const -> float
+{
+	float result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readFloat_(key, result);
+	}))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::readBool(const std::string &name, const std::string &key, bool def) const -> bool
+{
+	bool result;
+	if (!readHelper_(name, key, [&](const section_type &section) {
+		return section->readBool_(key, result);
+	}))
+	{
+		result = def;
+	}
+	return result;
+}
+
+auto ProfileParser::writeString(const std::string &name, const std::string &key, const std::string &value) -> bool
+{
+	bool res = false;
+
+	auto iter = data_.find(name);
+	if (iter == data_.end())
+	{
+		auto section = std::make_shared<ProfileSection>();
+		auto pair = data_.emplace(name, section);
+		if (pair.second)
+		{
+			res = pair.first->second->writeString(key, value);
+		}
+	}
+	else
+	{
+		res = iter->second->writeString(key, value);
+	}
+
+	return res;
+}
+
+auto ProfileParser::writeString(const std::string &name, const std::string &key, const char *value) -> bool
+{
+	std::string str;
+	if (value != nullptr)
+		str.assign(value);
+	return writeString(
+		name,
+		key,
+		str);
+}
+
+auto ProfileParser::writeUInt64(const std::string &name, const std::string &key, std::uint64_t value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		name,
+		key,
+		str);
+}
+
+auto ProfileParser::writeUInt32(const std::string &name, const std::string &key, std::uint32_t value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		name,
+		key,
+		str);
+}
+
+auto ProfileParser::writeInt64(const std::string &name, const std::string &key, std::int64_t value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		name,
+		key,
+		str);
+}
+
+auto ProfileParser::writeInt32(const std::string &name, const std::string &key, std::int32_t value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		name,
+		key,
+		str);
+}
+
+auto ProfileParser::writeDouble(const std::string &name, const std::string &key, double value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		name,
+		key,
+		str);
+}
+
+auto ProfileParser::writeFloat(const std::string &name, const std::string &key, float value) -> bool
+{
+	auto &&str = std::to_string(value);
+	return writeString(
+		name,
+		key,
+		str);
+}
+
+auto ProfileParser::writeBool(const std::string &name, const std::string &key, bool value) -> bool
+{
+	std::stringstream ss;
+	ss >> std::boolalpha >> value;
+	auto &&str = ss.str();
+	return writeString(
+		name,
+		key,
+		str);
+}
+
+void ProfileParser::parse_(std::string &name, const std::string &line)
 {
 	std::size_t p2 = 0;
 	std::size_t p1 = 0;
@@ -345,9 +862,9 @@ void ProfileParser::parse_(std::string &sec, const std::string &line)
 
 		if (line.at(p1) != kLB)
 		{
-			if (!sec.empty() && ((p2 = line.find_first_of(kES, p1)) != std::string::npos))
+			if (!name.empty() && ((p2 = line.find_first_of(kES, p1)) != std::string::npos))
 			{
-				auto iter = data_.find(sec);
+				auto iter = data_.find(name);
 				if (iter != data_.end())
 				{
 					auto k2 = prev_(line, p2++, p1);
@@ -370,314 +887,12 @@ void ProfileParser::parse_(std::string &sec, const std::string &line)
 		{
 			if ((p2 = line.find(kRB, ++p1)) != std::string::npos)
 			{
-				auto map(std::make_shared<KeyValueMap>(StrLssI));
-				sec.assign(line, p1, p2 - p1);
-				data_.emplace(sec, std::move(map));
+				auto section = std::make_shared<ProfileSection>();
+				name = line.substr(p1, p2 - p1);
+				data_.emplace(name, section);
 			}
 		}
 	}
-}
-
-bool ProfileParser::setAliasApp(const std::string &sec, const std::string &alias)
-{
-	bool res = false;
-
-	auto iter = data_.find(sec);
-	if (iter != data_.end())
-	{
-		auto pair = data_.emplace(alias, iter->second);
-		alias_.insert(alias);
-		res = pair.second;
-	}
-
-	return res;
-}
-
-bool ProfileParser::readHelper_(const std::string &sec, const std::string &key, const std::function<FieldDataHandler> &handler) const
-{
-	bool res = false;
-
-	const auto iter1 = data_.find(sec);
-	if (iter1 != data_.end())
-	{
-		const auto pair = iter1->second;
-		if (!pair->empty())
-		{
-			const auto iter2 = pair->find(key);
-			if (iter2 != pair->end())
-			{
-				std::string value(iter2->second);
-				if (!value.empty())
-				{
-					auto &front = value.front();
-					auto &back = value.back();
-					switch (MAKEDWORD_(front, back)) {
-					case MAKEDWORD_(kDQ, kDQ):
-						if (std::addressof(back) > std::addressof(front))
-						{
-							value.erase(value.begin());
-							value.pop_back();
-						}
-					default:
-						res = handler(value);
-						break;
-					}
-				}
-			}
-		}
-	}
-
-	return res;
-}
-
-auto ProfileParser::readString(const std::string &sec, const std::string &key, const std::string &def) const -> std::string
-{
-	std::string res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		res.assign(value);
-		return !res.empty();
-	}) && !def.empty())
-	{
-		res.assign(def);
-	}
-
-	return res;
-}
-
-auto ProfileParser::readString(const std::string &sec, const std::string &key, const char *def) const -> std::string
-{
-	std::string res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		res.assign(value);
-		return !res.empty();
-	}) && (def != nullptr))
-	{
-		res.assign(def);
-	}
-
-	return res;
-}
-
-auto ProfileParser::readUInt64(const std::string &sec, const std::string &key, std::uint64_t def) const -> std::uint64_t
-{
-	std::uint64_t res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		std::size_t pos = 0;
-		res = std::stoull(value, &pos);
-		return (pos > 0);
-	}))
-	{
-		res = def;
-	}
-
-	return res;
-}
-
-auto ProfileParser::readUInt32(const std::string &sec, const std::string &key, std::uint32_t def) const -> std::uint32_t
-{
-	std::uint32_t res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		std::size_t pos = 0;
-		res = std::stoul(value, &pos);
-		return (pos > 0);
-	}))
-	{
-		res = def;
-	}
-
-	return res;
-}
-
-auto ProfileParser::readInt64(const std::string &sec, const std::string &key, std::int64_t def) const -> std::int64_t
-{
-	std::int64_t res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		std::size_t pos = 0;
-		res = std::stoll(value, &pos);
-		return (pos > 0);
-	}))
-	{
-		res = def;
-	}
-
-	return res;
-}
-
-auto ProfileParser::readInt32(const std::string &sec, const std::string &key, std::int32_t def) const -> std::int32_t
-{
-	std::int32_t res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		std::size_t pos = 0;
-		res = std::stol(value, &pos);
-		return (pos > 0);
-	}))
-	{
-		res = def;
-	}
-
-	return res;
-}
-
-auto ProfileParser::readDouble(const std::string &sec, const std::string &key, double def) const -> double
-{
-	double res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		std::size_t pos = 0;
-		res = std::stod(value, &pos);
-		return (pos > 0);
-	}))
-	{
-		res = def;
-	}
-
-	return res;
-}
-
-auto ProfileParser::readFloat(const std::string &sec, const std::string &key, float def) const -> float
-{
-	float res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		std::size_t pos = 0;
-		res = std::stof(value, &pos);
-		return (pos > 0);
-	}))
-	{
-		res = def;
-	}
-
-	return res;
-}
-
-auto ProfileParser::readBool(const std::string &sec, const std::string &key, bool def) const -> bool
-{
-	bool res;
-
-	if (!readHelper_(sec, key, [&res](const std::string &value) {
-		stob_result_t result = stob_(value.data(), value.size());
-		switch (result) {
-		case stob_result_true:
-		case stob_result_false:
-			res = static_cast<bool>(result);
-			return true;
-		case stob_result_none:
-			return false;
-		default:
-			return false;
-		}
-	}))
-	{
-		res = def;
-	}
-
-	return res;
-}
-
-auto ProfileParser::writeString(const std::string &sec, const std::string &key, const std::string &value) -> bool
-{
-	bool res = false;
-
-	auto iter = data_.find(sec);
-	if (iter == data_.end())
-	{
-		auto map(std::make_shared<KeyValueMap>(StrLssI));
-		auto pair1 = data_.emplace(sec, std::move(map));
-		if (pair1.second)
-		{
-			auto pair2 = pair1.first->second->emplace(key, value);
-			res = pair2.second;
-		}
-	}
-	else
-	{
-		auto pair2 = iter->second->emplace(key, value);
-		res = pair2.second;
-	}
-
-	return res;
-}
-
-auto ProfileParser::writeString(const std::string &sec, const std::string &key, const char *value) -> bool
-{
-	std::string str;
-	if (value != nullptr)
-		str.assign(value);
-	return writeString(
-		sec,
-		key,
-		str);
-}
-
-auto ProfileParser::writeUInt64(const std::string &sec, const std::string &key, std::uint64_t value) -> bool
-{
-	auto &&str = std::to_string(value);
-	return writeString(
-		sec,
-		key,
-		str);
-}
-
-auto ProfileParser::writeUInt32(const std::string &sec, const std::string &key, std::uint32_t value) -> bool
-{
-	auto &&str = std::to_string(value);
-	return writeString(
-		sec,
-		key,
-		str);
-}
-
-auto ProfileParser::writeInt64(const std::string &sec, const std::string &key, std::int64_t value) -> bool
-{
-	auto &&str = std::to_string(value);
-	return writeString(
-		sec,
-		key,
-		str);
-}
-
-auto ProfileParser::writeInt32(const std::string &sec, const std::string &key, std::int32_t value) -> bool
-{
-	auto &&str = std::to_string(value);
-	return writeString(
-		sec,
-		key,
-		str);
-}
-
-auto ProfileParser::writeDouble(const std::string &sec, const std::string &key, double value) -> bool
-{
-	auto &&str = std::to_string(value);
-	return writeString(
-		sec,
-		key,
-		str);
-}
-
-auto ProfileParser::writeFloat(const std::string &sec, const std::string &key, float value) -> bool
-{
-	auto &&str = std::to_string(value);
-	return writeString(
-		sec,
-		key,
-		str);
-}
-
-auto ProfileParser::writeBool(const std::string &sec, const std::string &key, bool value) -> bool
-{
-	std::stringstream ss;
-	ss >> std::boolalpha >> value;
-	auto &&str = ss.str();
-	return writeString(
-		sec,
-		key,
-		str);
 }
 
 void ProfileParser::save(const std::string &file) const
@@ -705,28 +920,28 @@ void ProfileParser::save(std::ostream &os) const
 {
 	for (const auto item : data_)
 	{
-		if (alias_.find(item.first) != alias_.end())
+		auto pos = item.second->cbegin();
+		auto end = item.second->cend();
+
+		if (isAliasApp(item.first))
 		{
 			continue;
 		}
-
-		auto iter1 = item.second->cbegin();
-		auto iter2 = item.second->cend();
 
 		os << '[';
 		os << item.first;
 		os << ']';
 		os << std::endl;
 
-		while (iter1 != iter2)
+		while (pos != end)
 		{
-			os << iter1->first;
+			os << pos->first;
 			os << ' ';
 			os << '=';
 			os << ' ';
-			os << iter1->second;
+			os << pos->second;
 			os << std::endl;
-			iter1++;
+			pos++;
 		}
 	}
 }
@@ -734,12 +949,12 @@ void ProfileParser::save(std::ostream &os) const
 void ProfileParser::open(std::istream &is)
 {
 	std::string line;
-	std::string sec;
+	std::string name;
 
 	while (is.good())
 	{
 		std::getline(is, line);
-		parse_(sec, line);
+		parse_(name, line);
 	}
 }
 
